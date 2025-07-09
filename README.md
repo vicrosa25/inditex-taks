@@ -1,4 +1,4 @@
-# Inditex Price API
+# Price API
 
 ## Description
 This project is a Spring Boot application that provides a REST API for retrieving pricing information for products based on brand, product ID, and application date. The application follows a hexagonal architecture pattern (also known as ports and adapters) to ensure separation of concerns and maintainability.
@@ -6,7 +6,7 @@ This project is a Spring Boot application that provides a REST API for retrievin
 ## Technologies Used
 - Java 21
 - Spring Boot 3.5.3
-- Spring Data JDBC
+- Spring Data JPA
 - H2 Database (in-memory)
 - Maven
 - Lombok
@@ -17,16 +17,22 @@ The application follows a hexagonal architecture with the following components:
 
 ### Core Layers
 - **Domain Layer**: Contains the business entities and logic (Price model)
+  - Package: `rosa.victor.prueba.model`
 - **Application Layer**: Contains the use cases and ports (interfaces)
+  - Package: `rosa.victor.prueba.application`
   - **Ports**: Interfaces that define the contracts for the adapters
     - **In**: Interfaces for incoming adapters (e.g., REST controllers)
+      - Package: `rosa.victor.prueba.application.port.in`
     - **Out**: Interfaces for outgoing adapters (e.g., repositories)
+      - Package: `rosa.victor.prueba.application.port.out`
 
 ### Adapters
 - **In Adapters**: Implementations of the input ports
   - **REST**: REST controllers that handle HTTP requests
+    - Package: `rosa.victor.prueba.infrastructure.in.rest`
 - **Out Adapters**: Implementations of the output ports
   - **Persistence**: Repository implementations for data access
+    - Package: `rosa.victor.prueba.infrastructure.out.persistence`
 
 ## API Documentation
 The API is documented using SpringDoc OpenAPI. When the application is running, you can access the API documentation at:
@@ -40,7 +46,14 @@ http://localhost:8080/swagger-ui.html
     - `applicationDate`: The date and time for which to find the price (ISO format)
     - `productId`: The product identifier
     - `brandId`: The brand identifier
-  - **Response**: A PriceDto contain the price information
+  - **Response**: A PriceDto containing the price information with the following fields:
+    - `productId`: The product identifier
+    - `brandId`: The brand identifier
+    - `priceList`: The price list identifier
+    - `startDate`: The start date of price validity
+    - `endDate`: The end date of price validity
+    - `price`: The actual price value
+    - `curr`: Currency code (e.g., EUR)
 
 ## Exception Handling
 The application implements a global exception handling mechanism using Spring's `@ControllerAdvice` to provide consistent error responses across the API. All error responses follow a standardized format:
@@ -71,7 +84,7 @@ The application handles the following types of exceptions:
    - Occurs when request parameters fail validation
    - The `errors` field will contain field-specific validation errors
 
-## Database
+## Database and Data Access
 The application uses an H2 in-memory database with the following schema:
 
 ### PRICES Table
@@ -83,9 +96,21 @@ The application uses an H2 in-memory database with the following schema:
 - `product_id`: Product identifier
 - `priority`: Priority of the price (used to resolve conflicts)
 - `price`: The actual price value
-- `curr`: Currency code (e.g., EUR, USD)
+- `curr`: Currency code (e.g., EUR)
 
 Sample data is loaded from `data.sql` when the application starts.
+
+### Data Access Strategy
+The application uses a combination of Spring Data JPA and in-memory filtering:
+
+1. The `PriceRepository` interface defines a method to retrieve all prices.
+2. The `FindPriceService` applies filters to:
+   - Match the requested product ID
+   - Match the requested brand ID
+   - Ensure the application date falls within the price's validity period
+   - Select the price with the highest priority when multiple prices match
+
+This approach allows for flexible filtering and sorting of prices based on multiple criteria.
 
 ## Building and Running the Application
 
@@ -119,20 +144,26 @@ Integration tests are implemented in the controller layer to verify the end-to-e
   - Service layer processing
   - Repository data access
   - Response mapping
+  - Error handling
 
-The integration tests cover 5 specific test cases with different date/time inputs to verify the price retrieval logic works correctly in various scenarios.
+The integration tests cover:
+- Five specific test cases with different date/time inputs to verify the price retrieval logic work correctly in various scenarios
+- Error handling for non-existent prices (404 Not Found)
+- Error handling for missing required parameters (400 Bad Request)
+- Error handling for invalid parameter formats (400 Bad Request)
 
 ### Unit Tests
 Unit tests are implemented for individual components to verify their functionality in isolation:
 
+- **FindPriceServiceTest**: Tests the service layer logic
+  - Uses Mockito to mock the repository
+  - Tests five specific date/time scenarios to verify the correct price selection
+  - Tests error handling for non-existent products
+  - Tests error handling for dates outside valid ranges
+
 - **PriceMapperTest**: Tests the mapping between domain models and persistence entities
   - Verifies correct mapping from domain model to entity
-  - Verifies correct mapping from entity to domain model
-
-- **PriceRepositoryImplTest**: Tests the repository implementation with a test database
-  - Uses `@DataJdbcTest` to set up a test database environment
-  - Verifies correct price retrieval based on application date, product ID, and brand ID
-  - Tests multiple scenarios with different date/time inputs
+  - Verifies correct mapping from entity to the domain model
 
 - **GlobalExceptionHandlerTest**: Tests the exception handling mechanism
   - Verifies correct handling of SQL exceptions
